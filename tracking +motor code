@@ -1,0 +1,80 @@
+from gpiozero import Servo
+from gpiozero.pins.pigpio import PiGPIOFactory
+import cv2
+
+
+factory = PiGPIOFactory(host='192.168.137.55')
+# Device.pin_factory = Device.RPiGPIOFactory()
+servo_pin1 = 13
+servo_pin2 = 18
+s1 = Servo(servo_pin1,pin_factory=factory)
+s2 = Servo(servo_pin2,pin_factory=factory)
+
+s1.value = 0
+s2.value = 0
+xvalue = 0
+yvalue = 0
+CentralPoint = 0
+cap = cv2.VideoCapture(1)
+tracker = cv2.legacy.TrackerMOSSE_create()
+
+while True:
+    ret,frame = cap.read()
+    cv2.imshow("name",frame)
+    if cv2.waitKey(1)==0x0D:
+        break
+# When you want to draw a rectangle by mouse for tracking, please draw it from left top corner to right bottom corner
+success, img = cap.read()
+area = cv2.selectROI("name", img, False)
+tracker.init(img, area)
+
+
+def drawBox(img, area):
+    x, y, w, h = int(area[0]), int(area[1]), int(area[2]), int(area[3])
+    cv2.rectangle(img, (x, y), ((x + w), (y + h)), (255, 10, 255), 3, 1)
+    cv2.putText(img, "TRACKING", (75, 80), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 0), 1)
+
+while True:
+
+    timer = cv2.getTickCount()
+    success, img = cap.read()
+    x_mid = int(img.shape[1]/2)
+    y_mid = int(img.shape[0]/2)
+    success, area = tracker.update(img)
+    CentralPoint = (int(area[0] + area[2] / 2), int(area[1] + area[3] / 2))
+
+    print(CentralPoint)
+    if success:
+        drawBox(img, area)
+    else:
+        cv2.putText(img, "LOST", (75, 80), cv2.FONT_HERSHEY_COMPLEX, 0.5, (255, 255, 0), 1)
+    fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
+    cv2.putText(img, str(int(fps)), (75, 50), cv2.FONT_HERSHEY_COMPLEX, 0.4, (255, 255, 0), 1)
+    cv2.imshow('name', img)
+    if cv2.waitKey(1) == 0x0D:
+        s1.value = 0
+        s2.value = 0
+        break
+
+    if xvalue > 0.95:
+        xvalue = 0.9
+    elif xvalue < -0.95:
+        xvalue = -0.9
+    elif CentralPoint[0] > 320+50:
+        xvalue += (1/90)
+    elif CentralPoint[0] < 320-50:
+        xvalue -= (1/90)
+
+    if yvalue > 0.95:
+        yvalue = 0.9
+    elif yvalue < -0.95:
+        yvalue = -0.9
+    elif CentralPoint[1] > 240 + 30:
+        yvalue += (1 / 90)
+    elif CentralPoint[1] < 240 - 30:
+        yvalue -= (1 / 90)
+
+    print("y_value",round(yvalue,3))
+    print("x_value",round(xvalue,3))
+    s1.value = xvalue
+    s2.value = yvalue
